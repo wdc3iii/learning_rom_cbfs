@@ -40,8 +40,9 @@ gz = @(z) eye(2);
 h = @(z) z(2);
 Jh = @(z) [0 1];
 Pi = @(x) [x(1); x(2)];
+JPi = @(x) [1 0 0 0 0 0; 0 1 0 0 0 0];
 
-alpha = 1;
+alpha = 5;
 epsilon = 0;
 T = 6;
 dt = 0.01;
@@ -51,13 +52,17 @@ tol = 1e-5;
 K_delta = 0.5;
 verbose = 1;
 
+sf = predictive_safety_filter(v_des, k_track, fx, fz, gz, Pi, h, Jh, alpha, epsilon, T, dt, iters, tol, K_delta, verbose, 2, false);
 psf = predictive_safety_filter(v_des, k_track, fx, fz, gz, Pi, h, Jh, alpha, epsilon, T, dt, iters, tol, K_delta, verbose, 2, true);
+bpsf = smoother_predictive_safety_filter(v_des, k_track, fx, fz, gz, Pi, JPi, h, Jh, alpha, epsilon, T, dt, iters, tol, K_delta, verbose, 2, true);
 
 x0 = [0 1 pi/4 0 0 0];
 
 %% Default Experiment
 tic;
-[t, x, h, vd, v, d] = psf.apply_cl(x0, 20, 0.01);
+[tsf, xsf, hsf, vdsf, vsf, dsf] = sf.apply_cl(x0, 10, 0.01);
+[t, x, h, vd, v, d] = psf.apply_cl(x0, 10, 0.01);
+[tb, xb, hb, vdb, vb, db] = bpsf.apply_cl(x0, 10, 0.01);
 fprintf("Runtime: %0.2f\n", toc)
 
 %% Plot to visualize
@@ -65,38 +70,56 @@ figure(1)
 clf
 subplot(2,2,1)
 hold on
+plot(tsf, hsf)
 plot(t, h)
+plot(tb, hb)
+legend( 'Nominal SF', 'Predictive SF','Barrier PSF', AutoUpdate=false)
 yline(0, 'k')
-if any(h < 0)
-    plot(t(h < 0), h(h < 0), 'ro')
-end
+% if any(h < 0)
+%     plot(t(h < 0), h(h < 0), 'ro')
+% end
 xlabel('Time (s)')
 ylabel('$h(\Pi(x))$')
 
 subplot(2,2,2)
 hold on
+plot(xsf(:, 1), xsf(:, 2))
 plot(x(:, 1), x(:, 2))
+plot(xb(:, 1), xb(:, 2))
+legend( 'Nominal SF', 'Predictive SF','Barrier PSF', AutoUpdate=false)
 yline(0, 'k')
-if any(x(:, 2) < 0)
-    plot(x(x(:, 2) < 0, 1), x(x(:, 2) < 0, 2), 'ro')
-end
+% if any(x(:, 2) < 0)
+%     plot(x(x(:, 2) < 0, 1), x(x(:, 2) < 0, 2), 'ro')
+% end
 xlabel('X (m)')
 ylabel('Z (m)')
-sgtitle(sprintf('T: %d, Iters: %d, alpha: %d, epsilon: %d, Kp: %0.2f, Kd: %0.2f     Max Violation: %0.2e', T, iters, alpha, epsilon, kp, kd, -min(0, min(x(:, 2)))))
+% sgtitle(sprintf('T: %d, Iters: %d, alpha: %d, epsilon: %d, Kp: %0.2f, Kd: %0.2f     Max Violation: %0.2e', T, iters, alpha, epsilon, kp, kd, -min(0, min(x(:, 2)))))
+sgtitle(sprintf('Maximum Violations: Nominal: %0.2e PSF %0.2e BPSF: %0.2e', -min(0, min(hsf)), -min(0, min(h)), -min(0, min(hb))))
+
+% subplot(2,2,3)
+% hold on
+% plot(t, vd(:, 1), LineWidth=4)
+% plot(t, v(:, 1))
+% plot(t, x(:, 4))
+% legend('$v_x$ desired', '$v_x$ filtered', '$v_x$ actual')
 
 subplot(2,2,3)
 hold on
-plot(t, vd(:, 1), LineWidth=4)
-plot(t, v(:, 1))
-plot(t, x(:, 4))
-legend('$v_x$ desired', '$v_x$ filtered', '$v_x$ actual')
+plot(tsf, xsf(:, 5))
+plot(t, x(:, 5))
+plot(tb, xb(:, 5))
+legend( 'Nominal SF', 'Predictive SF','Barrier PSF', AutoUpdate=false)
+xlabel('Time (s)')
+ylabel('$v_z$')
 
 subplot(2,2,4)
 hold on
-plot(t, vd(:, 2))
-plot(t, v(:, 2))
-plot(t, x(:, 5))
-legend('$v_z$ desired', '$v_z$ filtered', '$v_z$ actual')
+plot(tsf, dsf)
+plot(t, d)
+plot(tb, db)
+legend( 'Nominal SF', 'Predictive SF','Barrier PSF', AutoUpdate=false)
+xlabel('Time (s)')
+ylabel('$\delta$')
 
 % %% Max Violation as a function of T, iters
 % 

@@ -1,4 +1,4 @@
-classdef predictive_safety_filter
+classdef smoother_predictive_safety_filter
     %PREDICTIVE_SAFETY_FILTER Implements a predictive safety filter
     %   Properties:
     %   v_des: @(z) v_d(z) computes the desired vector field as a function
@@ -28,6 +28,7 @@ classdef predictive_safety_filter
         fz
         gz
         Pi
+        JPi
 
         % Barrier conditions
         h
@@ -49,7 +50,7 @@ classdef predictive_safety_filter
     end
 
     methods
-        function obj = predictive_safety_filter(v_des, k_track, fx, fz, gz, Pi, h, Jh, alpha, epsilon, T, dt, iters, tol, K_delta, verbose, fh, use_delta)
+        function obj = smoother_predictive_safety_filter(v_des, k_track, fx, fz, gz, Pi, JPi, h, Jh, alpha, epsilon, T, dt, iters, tol, K_delta, verbose, fh, use_delta)
             %PREDICTIVE_SAFETY_FILTER Construct an instance of this class
             %   Detailed explanation goes here
             obj.v_des = v_des;
@@ -58,6 +59,7 @@ classdef predictive_safety_filter
             obj.fz = fz;
             obj.gz = gz;
             obj.Pi = Pi;
+            obj.JPi = JPi;
             obj.h = h;
             obj.Jh = Jh;
             obj.alpha = alpha;
@@ -90,10 +92,13 @@ classdef predictive_safety_filter
                     % Evaluate barrier function on full order model
                     h_bar = inf;
                     hx = zeros(size(t));
+                    dot_hx = zeros(size(t));
                     for tt = 1:size(t, 1)
                         hx(tt) = obj.h(obj.Pi(x(tt, :)));
-                        if hx(tt) < h_bar
-                            h_bar = hx(tt);
+                        dot_hx(tt) = obj.Jh(obj.Pi(x(tt, :))) * obj.JPi(x(tt, :)) * obj.fx(x(tt, :), obj.k_track(x(tt, :), obj.safety_filter(obj.Pi(x(tt, :)))));
+                        viol = dot_hx(tt) + obj.alpha * hx(tt);
+                        if viol < h_bar
+                            h_bar = viol;
                         end
                     end
 
@@ -102,6 +107,12 @@ classdef predictive_safety_filter
                     obj.delta = max(0, obj.delta - obj.K_delta * h_bar);
                     if obj.verbose > 0
                         fprintf("\tI: %d, delta: %0.4f\n", i, obj.delta)
+                        % figure(2)
+                        % clf
+                        % hold on
+                        % plot(dot_hx)
+                        % plot(-obj.alpha * hx)
+                        % pause
                     end
                     if obj.verbose > 1
                         l = (i - 1) / (obj.iters - 1);

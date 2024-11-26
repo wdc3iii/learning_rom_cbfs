@@ -2,3 +2,6 @@
 *.asv
 *.fig
 *.png
+*.pdf
+*.svg
+*.mat
